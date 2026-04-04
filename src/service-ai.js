@@ -38,44 +38,40 @@ export async function getGroqChatCompletion() {
     },
   ];
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages,
-    tools,
-    tool_choice: "auto",
-  });
+  // ReAct Loop: keep calling the model until it stops requesting tools
+  while (true) {
+    const completion = await groq.chat.completions.create({
+      model: "openai/gpt-oss-120b",
+      messages,
+      tools,
+      tool_choice: "auto",
+    });
 
-  const assistantMessage = completion.choices[0].message;
-  const toolCalls = assistantMessage.tool_calls;
+    const assistantMessage = completion.choices[0].message;
+    messages.push(assistantMessage);
 
-  if (!toolCalls || toolCalls.length === 0) {
-    console.log(`Assistant: ${assistantMessage?.content}`);
-    return;
-  }
+    const toolCalls = assistantMessage.tool_calls;
 
-  messages.push(assistantMessage);
+    // If no tool calls, the model is done — print the final answer and exit
+    if (!toolCalls || toolCalls.length === 0) {
+      console.log(`Assistant: ${assistantMessage?.content}`);
+      break;
+    }
 
-  for (const toolCall of toolCalls) {
-    if (toolCall.function?.name === "webSearch") {
-      const args = JSON.parse(toolCall.function.arguments || "{}");
-      const response = await webSearch({ query: args.query });
+    // Execute each requested tool and push results back into messages
+    for (const toolCall of toolCalls) {
+      if (toolCall.function?.name === "webSearch") {
+        const args = JSON.parse(toolCall.function.arguments || "{}");
+        const response = await webSearch({ query: args.query });
 
-      messages.push({
-        role: "tool",
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(response),
-      });
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(response),
+        });
+      }
     }
   }
-
-  const finalCompletion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages,
-    tools,
-    tool_choice: "auto",
-  });
-
-  console.log(`Assistant: ${finalCompletion.choices[0].message?.content}`);
 }
 
 async function webSearch({ query }) {
