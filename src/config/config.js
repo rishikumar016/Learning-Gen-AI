@@ -22,6 +22,18 @@ if (!process.env.GROQ_API_KEY) {
   console.warn("GROQ_API_KEY is not defined. GROQ integration will not work.");
 }
 
+// if (!process.env.OPENAI_API_KEY) {
+//   console.warn(
+//     "OPENAI_API_KEY is not defined. OpenAI integration will not work.",
+//   );
+// }
+
+// if (!process.env.OPENAI_MODEL) {
+//   console.warn(
+//     "OPENAI_MODEL is not defined. OpenAI integration will not work.",
+//   );
+// }
+
 if (!process.env.TAVILY_API_KEY) {
   console.warn(
     "TAVILY_API_KEY is not defined. Tavily integration will not work.",
@@ -34,6 +46,8 @@ const config = {
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET,
   PORT: process.env.PORT,
   GROQ_API_KEY: process.env.GROQ_API_KEY,
+  // OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  // OPENAI_MODEL: process.env.OPENAI_MODEL,
   TAVILY_API_KEY: process.env.TAVILY_API_KEY,
   NODE_ENV: process.env.NODE_ENV || "development",
 };

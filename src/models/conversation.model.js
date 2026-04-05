@@ -39,7 +39,7 @@ const conversationSchema = new mongoose.Schema(
 );
 
 // Auto-generate title from the first user message
-conversationSchema.pre("save", function (next) {
+conversationSchema.pre("save", async function () {
   // Only set title if it's still the default and there's at least one user message
   if (this.title === "New Chat" && this.messages.length > 0) {
     const firstUserMsg = this.messages.find((m) => m.role === "user");
@@ -48,7 +48,7 @@ conversationSchema.pre("save", function (next) {
       this.title = text.slice(0, 50) + (text.length > 50 ? "..." : "");
     }
   }
-  next();
+  return;
 });
 
 // Index for efficient queries: user's conversations sorted by recent

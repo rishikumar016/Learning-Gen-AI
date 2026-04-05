@@ -2,12 +2,14 @@ import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";
 import { AppError } from "../middleware/error.js";
 import config from "../config/config.js";
-import OpenAI from "openai";
+// import OpenAI from "openai";
 
 const MAX_TOOL_ROUNDS = 5; // Prevent infinite ReAct loops
 const MAX_INPUT_LENGTH = 10000; // Max characters per user message
 
-const openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+// const openai = new OpenAI({ apiKey: config.OPENAI_API_KEY });
+const groq = new Groq({ apiKey: config.GROQ_API_KEY });
+
 const tavilyClient = tavily({ apiKey: config.TAVILY_API_KEY });
 
 const tools = [
@@ -52,7 +54,7 @@ export async function getChatCompletion(conversationHistory, userMessage) {
     );
   }
 
-  const client = openai;
+  const client = groq;
 
   // Build messages array: system prompt + conversation history + new user message
   const messages = [
@@ -71,7 +73,7 @@ export async function getChatCompletion(conversationHistory, userMessage) {
     let completion;
     try {
       completion = await client.chat.completions.create({
-        model: config.OPENAI_MODEL || "gpt-5.1-mini",
+        model: "openai/gpt-oss-20b",
         messages,
         tools,
         tool_choice: "auto",
