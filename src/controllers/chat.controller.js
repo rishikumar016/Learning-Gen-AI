@@ -23,9 +23,6 @@ conversationCache.on("expired", async (key, conversation) => {
   }
 });
 
-/**
- * Build a cache key scoped to the user to prevent cross-user access.
- */
 function cacheKey(userId, conversationId) {
   return `conv:${userId}:${conversationId}`;
 }
@@ -64,19 +61,58 @@ function evictFromCache(userId, conversationId) {
  */
 export const createConversation = async (req, res, next) => {
   try {
-    const { title } = req.body;
+    const { content } = req.body;
 
     const conversation = await Conversation.create({
       userId: req.user._id,
-      title: title || "New Chat",
     });
+
+    // If user sends a message along with conversation creation, process it
+    if (content && typeof content === "string" && content.trim()) {
+      conversation.messages.push({ role: "user", content: content.trim() });
+
+      const aiResponse = await getChatCompletion([], content.trim());
+
+      conversation.messages.push({
+        role: "assistant",
+        content: aiResponse.content,
+      });
+      conversation.totalTokensUsed += aiResponse.tokensUsed;
+      await conversation.save();
+
+      // Cache the active conversation
+      conversationCache.set(
+        cacheKey(req.user._id, conversation._id),
+        conversation,
+      );
+
+      const messages = conversation.messages;
+      const userMsg = messages[0];
+      const assistantMsg = messages[1];
+
+      return res.status(201).json({
+        id: conversation._id,
+        title: conversation.title,
+        userMessage: {
+          id: userMsg._id,
+          role: userMsg.role,
+          content: userMsg.content,
+          timestamp: userMsg.createdAt,
+        },
+        assistantMessage: {
+          id: assistantMsg._id,
+          role: assistantMsg.role,
+          content: assistantMsg.content,
+          timestamp: assistantMsg.createdAt,
+        },
+        tokensUsed: aiResponse.tokensUsed,
+      });
+    }
 
     return res.status(201).json({
       id: conversation._id,
       title: conversation.title,
       messages: [],
-      createdAt: conversation.createdAt,
-      updatedAt: conversation.updatedAt,
     });
   } catch (error) {
     return next(error);
@@ -179,12 +215,6 @@ export const sendMessage = async (req, res, next) => {
 
     // Add user message
     conversation.messages.push({ role: "user", content: content.trim() });
-
-    // Auto-generate title from first user message
-    if (conversation.messages.length === 1) {
-      conversation.title =
-        content.trim().slice(0, 50) + (content.length > 50 ? "..." : "");
-    }
 
     // Build history from cached conversation (no DB read needed)
     const historyForAI = conversation.messages
