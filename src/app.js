@@ -3,6 +3,8 @@ import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import authRouters from "./routers/auth.routes.js";
+import chatRouter from "./routers/chat.routes.js";
+import { rateLimiter } from "./middleware/rate-limiter.js";
 import { AppError, errorHandler } from "./middleware/error.js";
 const app = express();
 
@@ -14,11 +16,21 @@ app.use(
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
 // Routes
 app.use("/api/auth", authRouters);
+app.use(
+  "/api/chat",
+  rateLimiter({
+    windowMs: 60_000, // 1 minute
+    maxRequests: 20, // 20 AI requests per minute per user
+    message:
+      "Too many chat requests. Please wait before sending more messages.",
+  }),
+  chatRouter,
+);
 
 app.use((req, res, next) => {
   next(new AppError(`Route ${req.originalUrl} not found`, 404));

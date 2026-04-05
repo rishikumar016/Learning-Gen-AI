@@ -18,11 +18,23 @@ if (!process.env.REFRESH_TOKEN_SECRET) {
   );
 }
 
+if (!process.env.GROQ_API_KEY) {
+  console.warn("GROQ_API_KEY is not defined. GROQ integration will not work.");
+}
+
+if (!process.env.TAVILY_API_KEY) {
+  console.warn(
+    "TAVILY_API_KEY is not defined. Tavily integration will not work.",
+  );
+}
+
 const config = {
   MONGODB_URI: process.env.MONGODB_URI,
   JWT_SECRET: process.env.JWT_SECRET,
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET,
   PORT: process.env.PORT,
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  TAVILY_API_KEY: process.env.TAVILY_API_KEY,
   NODE_ENV: process.env.NODE_ENV || "development",
 };
 
