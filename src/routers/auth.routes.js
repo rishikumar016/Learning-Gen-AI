@@ -7,6 +7,11 @@ import {
   getUser,
 } from "../controllers/auth.controller.js";
 import authMiddleware from "../middleware/auth-middleware.js";
+import { validate } from "../middleware/validate.js";
+import {
+  registerSchema,
+  loginSchema,
+} from "../validators/auth.validators.js";
 
 const authRouters = express.Router();
 
@@ -16,9 +21,9 @@ const authRouters = express.Router();
  *  @access Public
  */
 
-authRouters.post("/register", registerUser);
+authRouters.post("/register", validate(registerSchema), registerUser);
 
-authRouters.post("/login", loginUser);
+authRouters.post("/login", validate(loginSchema), loginUser);
 
 authRouters.get("/logout", authMiddleware, logoutUser);
 

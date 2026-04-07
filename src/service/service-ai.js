@@ -180,6 +180,177 @@ export async function getChatCompletion(conversationHistory, userMessage) {
   };
 }
 
+/**
+ * Streaming version of getChatCompletion.
+ * Returns an async generator that yields chunks:
+ *   { type: 'token', content: string }
+ *   { type: 'tool_start', name: string }
+ *   { type: 'tool_result', name: string }
+ *   { type: 'done', content: string, tokensUsed: number }
+ */
+export async function* getChatCompletionStream(
+  conversationHistory,
+  userMessage,
+) {
+  if (!userMessage || typeof userMessage !== "string") {
+    throw new AppError("Message content is required", 400);
+  }
+
+  if (userMessage.length > MAX_INPUT_LENGTH) {
+    throw new AppError(
+      `Message too long. Maximum ${MAX_INPUT_LENGTH} characters allowed`,
+      400,
+    );
+  }
+
+  const client = groq;
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...conversationHistory.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  let totalTokensUsed = 0;
+  let rounds = 0;
+  let fullContent = "";
+
+  while (rounds < MAX_TOOL_ROUNDS) {
+    rounds++;
+
+    let stream;
+    try {
+      stream = await client.chat.completions.create({
+        model: "openai/gpt-oss-20b",
+        messages,
+        tools,
+        tool_choice: "auto",
+        max_tokens: 4096,
+        temperature: 0.7,
+        stream: true,
+      });
+    } catch (error) {
+      if (error.status === 429) {
+        throw new AppError(
+          "AI service rate limit reached. Please try again later.",
+          429,
+        );
+      }
+      if (error.status === 401) {
+        throw new AppError("AI service authentication failed", 500);
+      }
+      throw new AppError(
+        `AI service error: ${error.message || "Unknown error"}`,
+        502,
+      );
+    }
+
+    let currentContent = "";
+    let toolCalls = [];
+    let finishReason = null;
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta;
+      finishReason = chunk.choices?.[0]?.finish_reason || finishReason;
+
+      if (chunk.usage) {
+        totalTokensUsed +=
+          (chunk.usage.prompt_tokens || 0) +
+          (chunk.usage.completion_tokens || 0);
+      }
+
+      if (!delta) continue;
+
+      // Accumulate text content and yield tokens
+      if (delta.content) {
+        currentContent += delta.content;
+        yield { type: "token", content: delta.content };
+      }
+
+      // Accumulate tool call deltas
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index;
+          if (!toolCalls[idx]) {
+            toolCalls[idx] = {
+              id: tc.id || "",
+              function: { name: tc.function?.name || "", arguments: "" },
+            };
+          }
+          if (tc.id) toolCalls[idx].id = tc.id;
+          if (tc.function?.name)
+            toolCalls[idx].function.name = tc.function.name;
+          if (tc.function?.arguments) {
+            toolCalls[idx].function.arguments += tc.function.arguments;
+          }
+        }
+      }
+    }
+
+    // If the model produced text and no tool calls, we're done
+    if (
+      toolCalls.length === 0 ||
+      finishReason === "stop" ||
+      !toolCalls.some((tc) => tc.function?.name)
+    ) {
+      fullContent += currentContent;
+      yield {
+        type: "done",
+        content: fullContent,
+        tokensUsed: totalTokensUsed,
+      };
+      return;
+    }
+
+    // Model wants to call tools — add assistant message with tool_calls, then execute
+    const assistantMessage = {
+      role: "assistant",
+      content: currentContent || null,
+      tool_calls: toolCalls.map((tc) => ({
+        id: tc.id,
+        type: "function",
+        function: { name: tc.function.name, arguments: tc.function.arguments },
+      })),
+    };
+    messages.push(assistantMessage);
+
+    for (const toolCall of assistantMessage.tool_calls) {
+      if (toolCall.function?.name === "webSearch") {
+        yield { type: "tool_start", name: "webSearch" };
+        try {
+          const args = JSON.parse(toolCall.function.arguments || "{}");
+          const response = await webSearch({ query: args.query });
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(response),
+          });
+        } catch (toolError) {
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              error: "Web search failed. Please answer without search.",
+            }),
+          });
+        }
+        yield { type: "tool_result", name: "webSearch" };
+      }
+    }
+
+    // Reset for the next round (the model will continue with tool results)
+    fullContent = "";
+  }
+
+  // Exhausted all rounds
+  yield {
+    type: "done",
+    content:
+      fullContent || "I was unable to complete the response. Please try again.",
+    tokensUsed: totalTokensUsed,
+  };
+}
+
 async function webSearch({ query }) {
   const client = tavilyClient;
   const response = await client.search(query);
