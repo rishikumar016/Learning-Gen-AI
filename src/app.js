@@ -32,6 +32,14 @@ app.use(
   chatRouter,
 );
 
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Welcome to the AI Chat API" });
+});
+
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use((req, res, next) => {
   next(new AppError(`Route ${req.originalUrl} not found`, 404));
 });
