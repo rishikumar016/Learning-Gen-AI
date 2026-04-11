@@ -1,0 +1,61 @@
+{
+  "family": "chatbot-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::767903311473:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "chatbot-backend",
+      "image": "767903311473.dkr.ecr.ap-south-1.amazonaws.com/chatbot-backend:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "PORT",
+          "value": "8000"
+        },
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "MONGODB_URI",
+          "valueFrom": "arn:aws:ssm:ap-south-1:767903311473:parameter/chatbot-backend/MONGODB_URI"
+        },
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "arn:aws:ssm:ap-south-1:767903311473:parameter/chatbot-backend/JWT_SECRET"
+        },
+        {
+          "name": "REFRESH_TOKEN_SECRET",
+          "valueFrom": "arn:aws:ssm:ap-south-1:767903311473:parameter/chatbot-backend/REFRESH_TOKEN_SECRET"
+        },
+        {
+          "name": "GROQ_API_KEY",
+          "valueFrom": "arn:aws:ssm:ap-south-1:767903311473:parameter/chatbot-backend/GROQ_API_KEY"
+        },
+        {
+          "name": "TAVILY_API_KEY",
+          "valueFrom": "arn:aws:ssm:ap-south-1:767903311473:parameter/chatbot-backend/TAVILY_API_KEY"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/chatbot-backend",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "essential": true
+    }
+  ]
+}
